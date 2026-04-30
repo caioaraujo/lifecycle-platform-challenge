@@ -1,0 +1,44 @@
+INPUT:
+    Create a bulk of data, respecting the BigQuery freetier, based on the schema:
+    CREATE TABLE renter_activity (
+      renter_id STRING,
+      event_type STRING,        -- 'page_view', 'search', 'application_start', 'application_complete', 'lease_signed'
+      event_timestamp TIMESTAMP,
+      property_id STRING,
+      channel STRING,           -- 'web', 'ios', 'android'
+      utm_source STRING
+    );
+
+    CREATE TABLE renter_profiles (
+      renter_id STRING,
+      email STRING,
+      phone STRING,
+      last_login TIMESTAMP,
+      subscription_status STRING,  -- 'active', 'churned', 'never_subscribed'
+      sms_consent BOOLEAN,
+      email_consent BOOLEAN,
+      dnd_until TIMESTAMP,         -- Do Not Disturb until this date (NULL = no restriction)
+      created_at TIMESTAMP
+    );
+
+    CREATE TABLE suppression_list (
+      renter_id STRING,
+      suppression_reason STRING,  -- 'unsubscribed', 'bounced', 'complained', 'dnc_registry'
+      suppressed_at TIMESTAMP
+    );
+    and which shows result for the following conditions:
+    Last login was more than 30 days ago
+    Subscription status is 'churned'
+    Renter has performed at least 3 searches in the past 90 days (showing latent intent)
+    Renter has a phone number on file
+    Renter has sms_consent = TRUE
+    Renter is NOT in the suppression list
+    Renter's dnd_until is either NULL or in the past
+    The query must be idempotent — running it twice on the same day produces the same result
+
+OUTPUT:
+    Run command in terminal:
+    ```
+    cd /home/caio-araujo/Projects/Python/lifecycle-platform-challenge && python ai-session/generate_data.py
+    ```
+    Running the Python script to generate bulk sample data in CSV format based on the provided schema.
