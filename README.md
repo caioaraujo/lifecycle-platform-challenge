@@ -46,6 +46,8 @@ To run Airflow locally, follow the steps:
 
 ## What I would make differently with more time
 
-- Provide a Docker image or other way to make it easier to run and deploy the project without having to set up manually
+- Provide a Docker image and/or other way (Kubernetes, terraform) to make it easier to run and deploy the project without having to set up manually
 - Add unit tests for scripts and integration tests for the client API integration and airflow DAGs
+- Add CI/CD pipeline to automate the testing and deployment
+- Add monitoring for the Airflow DAGs to track the execution and performance of the tasks, and to be able to alert in case of failures or issues
 - Change SQLite for PostgreSQL or MySQL for better performance and scalability, especially for production environments

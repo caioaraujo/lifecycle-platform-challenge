@@ -27,48 +27,53 @@ def execute_campaign_send(
         response = None
 
         # Add retries in case of rate limit
-        while attempt <= max_retries:
+        while attempt < max_retries:
             logging.info(f"Sending batch of size {len(batch)} in the {attempt} attempt")
-            response = esp_client.send_batch(campaign_id, batch)
-            if response.status_code not in (200, 429) and attempt == max_retries:
-                logging.error(f"Failing to send batch on the last attempt. Status code: {response.status_code}")
-                break
+            try:
+                response = esp_client.send_batch(campaign_id, batch)
+            except Exception as e:
+                logging.error("Error calling ESP")
+                attempt += 1
+                time.sleep(2 ** attempt)
+                continue
             if response.status_code == 429:
                 wait_time = (2 ** attempt) + random.uniform(0, 1)
                 time.sleep(wait_time)
                 attempt += 1
                 logging.warning(f"Rate limit error in the {attempt} attempt. Trying again in {wait_time} seconds")
-        if response:
-            if response.status_code == 429:
-                total_failed += len(batch)
-                logging.warning(f"Batch failed to send due to rating limit after {max_retries} attempts")
-                _append_log(
-                    sent_log_path,
-                    f"The following batch has failed to send due to rating limit: {batch}\n")
-                continue
-            elif response.status_code != 200:
-                total_failed += len(batch)
-                logging.warning(f"Batch failed to send due to an error with status code {response.status_code} after {max_retries} attempts")
-                _append_log(
-                    sent_log_path,
-                    f"The following batch failed to send: {batch}\n Error {response.status_code}: {response.json()}\n")
-                continue
-            else:
-                total_sent += len(batch)
-                logging.info(f"Batch sent successfully")
-                _append_log(
-                    sent_log_path,
-                    f"The following batch was sent successfully: {batch}\n")
-            response = response.json()
-            total_skipped += response.get("total_skipped", 0)
+
+        if response.status_code == 429:
+            total_failed += len(batch)
+            logging.warning(f"Batch failed to send due to rating limit after {max_retries} attempts")
+            _append_log(
+                sent_log_path,
+                f"The following batch has failed to send due to rating limit: {batch}\n")
+            continue
+
+        if response.status_code != 200:
+            total_failed += len(batch)
+            logging.warning(f"Batch failed to send due to an error with status code {response.status_code} after {max_retries} attempts")
+            _append_log(
+                sent_log_path,
+                f"The following batch failed to send: {batch}\n Error {response.status_code}: {response.json()}\n")
+            continue
+
+        total_sent += len(batch)
+        logging.info(f"Batch sent successfully")
+        _append_log(
+            sent_log_path,
+            f"The following batch was sent successfully: {batch}\n")
+        response = response.json()
+        total_skipped += response.get("total_skipped", 0)
 
     end_time = time.time()
+    elapsed_time = end_time - start_time
 
     return {
         "total_sent": total_sent,
         "total_failed": total_failed,
         "total_skipped": total_skipped,
-        "elapsed_seconds": end_time - start_time,
+        "elapsed_seconds": f"{elapsed_time:.6f}",
     }
 
 
