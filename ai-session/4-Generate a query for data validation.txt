@@ -1,0 +1,48 @@
+INPUT:
+    Create a query for audience_segmentation.staging.audience_segmentation_stage based on the scenario "no obvious anomalies like audience > 2× historical average"
+
+OUTPUT:
+    ```sql
+    WITH daily AS (
+      SELECT
+        _PARTITIONDATE,
+        COUNT(*) AS daily_total
+      FROM `audience_segmentation.staging.audience_segmentation_stage`
+      WHERE _PARTITIONDATE BETWEEN DATE_SUB(@run_date, INTERVAL 30 DAY)
+                                AND @run_date
+      GROUP BY _PARTITIONDATE
+    ),
+
+    current AS (
+      SELECT daily_total AS total_today
+      FROM daily
+      WHERE _PARTITIONDATE = @run_date
+    ),
+
+    historical AS (
+      SELECT
+        AVG(daily_total) AS avg,
+        STDDEV(daily_total) AS stddev
+      FROM daily
+      WHERE _PARTITIONDATE < @run_date
+    ),
+
+    final AS (
+      SELECT
+        c.total_today,
+        h.avg,
+        h.stddev,
+        SAFE_DIVIDE(c.total_today, h.avg) AS ratio,
+        SAFE_DIVIDE(c.total_today - h.avg, h.stddev) AS z_score
+      FROM current c
+      CROSS JOIN historical h
+    )
+
+    SELECT *,
+      CASE
+        WHEN ratio > 2 THEN 'ANOMALY_RATIO'
+        WHEN ABS(z_score) > 3 THEN 'ANOMALY_ZSCORE'
+        ELSE 'OK'
+      END AS status
+    FROM final
+   ```

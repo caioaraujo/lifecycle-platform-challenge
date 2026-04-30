@@ -38,5 +38,14 @@ To run Airflow locally, follow the steps:
 
 ## Design decisions
 
+- I choose to separate the tasks in different contexts (extract, transform, load) to make the code more organized and easier to maintain
+- I choose to use SQLite for Airflow database because it's easy to set up and doesn't require additional configuration
+- I choose to use @task decorator for tasks because it's more concise and easier to read, once all operators are simple Python functions
+- I choose to keep the scripts out of the DAG file to make it more readable, easier to test and maintain, following the Single Responsibility Principle
+- I choose to create a file for query repository to make it more organized and easier to maintain
+
 ## What I would make differently with more time
 
+- Provide a Docker image or other way to make it easier to run and deploy the project without having to set up manually
+- Add unit tests for scripts and integration tests for the client API integration and airflow DAGs
+- Change SQLite for PostgreSQL or MySQL for better performance and scalability, especially for production environments

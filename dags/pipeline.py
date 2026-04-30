@@ -1,20 +1,21 @@
 import json
+import logging
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.decorators import task, get_current_context
 from airflow.providers.slack.notifications.slack import send_slack_notification
-from airflow.utils.dates import days_ago
+from airflow.sdk import task, get_current_context
 from google.cloud import bigquery
 
 from scripts.campaign_sender import execute_campaign_send
 from scripts.client import ESPClient
-from scripts.query_repository import AUDIENCE_COUNT_QUERY, AUDIENCE_SEGMENTATION_QUERY, AUDIENCE_STAGE_QUERY
+from scripts.query_repository import AUDIENCE_QUERY_VALIDATION, AUDIENCE_SEGMENTATION_QUERY, AUDIENCE_STAGE_QUERY
 
 default_args = {
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
 }
+
 
 def sla_miss_callback(dag, task_list, blocking_task_list, slas, blocking_tis):
     print("SLA missed!")
@@ -57,6 +58,7 @@ with DAG(
                 )
             ]
         )
+        logging.info("Querying audience segmentation data")
         query_job = bq_client.query(AUDIENCE_SEGMENTATION_QUERY, job_config=job_config)
         query_job.result()
 
@@ -77,12 +79,27 @@ with DAG(
             ]
         )
 
-        result = list(client.query(AUDIENCE_COUNT_QUERY, job_config=job_config))[0]
+        result = client.query(AUDIENCE_QUERY_VALIDATION, job_config=job_config).result()
+        row = list(result)[0]
 
-        if result.total == 0:
-            raise Exception("No audience data found")
+        if row.total_today == 0:
+            error = "No audience data found for the campaign today"
+            logging.error(error)
+            raise Exception(error)
 
-        # Apply other validations...
+        if row.status != "OK":
+            logging.error(f"Audience resulted in status {row.status}!")
+            raise ValueError(
+                f"""
+                Audience anomaly detected!
+
+                total_today: {row.total_today}
+                avg: {row.avg:.2f}
+                ratio: {row.ratio:.2f}
+                z_score: {row.z_score:.2f}
+                status: {row.status}
+                """
+            )
 
 
     @task(sla=timedelta(hours=3))
@@ -100,6 +117,7 @@ with DAG(
             ]
         )
 
+        logging.info("Querying audience data from staging")
         result = client.query(AUDIENCE_STAGE_QUERY, job_config=job_config).result()
 
         audience = []
@@ -134,12 +152,15 @@ with DAG(
         errors = bq_client.insert_rows_json(table_id, rows)
 
         if errors:
+            logging.error("Error inserting log into BigQuery")
             raise Exception(errors)
 
         send_slack_notification(
-            text=f"```{json.dumps(api_response, indent=2)}```",
-            channel="#alerts",
+            text=f"Campaign data pipeline finished: \n```{json.dumps(api_response, indent=2)}```",
+            channel="#campaign-notifications",
         )(context)
+
+        logging.info("Campaign data pipeline finished with success!")
 
 
     t1 = read_query()

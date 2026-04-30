@@ -1,3 +1,4 @@
+import logging
 import time
 import random
 
@@ -18,31 +19,46 @@ def execute_campaign_send(
     total_skipped = 0
     start_time = time.time()
 
+    logging.info("Starting campaign sending")
     for i in range(0, len(audience), batch_size):
-        batch = audience[i:i + batch_size]
+        batch = audience[i:i + batch_size] # limit data by batches to avoid rate limit error
         max_retries = 5
         attempt = 0
         response = None
+
+        # Add retries in case of rate limit
         while attempt <= max_retries:
+            logging.info(f"Sending batch of size {len(batch)} in the {attempt} attempt")
             response = esp_client.send_batch(campaign_id, batch)
-            if response.status_code != 429 or attempt == max_retries:
+            if response.status_code not in (200, 429) and attempt == max_retries:
+                logging.error(f"Failing to send batch on the last attempt. Status code: {response.status_code}")
                 break
-            wait_time = (2 ** attempt) + random.uniform(0, 1)
-            time.sleep(wait_time)
-            attempt += 1
+            if response.status_code == 429:
+                wait_time = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(wait_time)
+                attempt += 1
+                logging.warning(f"Rate limit error in the {attempt} attempt. Trying again in {wait_time} seconds")
         if response:
             if response.status_code == 429:
                 total_failed += len(batch)
-                with open(sent_log_path, "a") as sent_log:
-                    sent_log.write(f"The following batch has failed to send due to rating limit: {batch}\n")
+                logging.warning(f"Batch failed to send due to rating limit after {max_retries} attempts")
+                _append_log(
+                    sent_log_path,
+                    f"The following batch has failed to send due to rating limit: {batch}\n")
                 continue
             elif response.status_code != 200:
                 total_failed += len(batch)
-                with open(sent_log_path, "a") as sent_log:
-                    sent_log.write(f"The following batch failed to send: {batch}\n Error {response.status_code}: {response.json()}\n")
+                logging.warning(f"Batch failed to send due to an error with status code {response.status_code} after {max_retries} attempts")
+                _append_log(
+                    sent_log_path,
+                    f"The following batch failed to send: {batch}\n Error {response.status_code}: {response.json()}\n")
                 continue
             else:
                 total_sent += len(batch)
+                logging.info(f"Batch sent successfully")
+                _append_log(
+                    sent_log_path,
+                    f"The following batch was sent successfully: {batch}\n")
             response = response.json()
             total_skipped += response.get("total_skipped", 0)
 
@@ -54,3 +70,8 @@ def execute_campaign_send(
         "total_skipped": total_skipped,
         "elapsed_seconds": end_time - start_time,
     }
+
+
+def _append_log(log_path: str, log_text: str):
+    with open(log_path, "a") as log:
+        log.write(log_text)

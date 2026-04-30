@@ -1,5 +1,6 @@
 INPUT:
     Create a bulk of data, respecting the BigQuery freetier, based on the schema:
+    ```sql
     CREATE TABLE renter_activity (
       renter_id STRING,
       event_type STRING,        -- 'page_view', 'search', 'application_start', 'application_complete', 'lease_signed'
@@ -26,7 +27,9 @@ INPUT:
       suppression_reason STRING,  -- 'unsubscribed', 'bounced', 'complained', 'dnc_registry'
       suppressed_at TIMESTAMP
     );
-    and which shows result for the following conditions:
+    ```
+
+    and some data must result for the following conditions:
     Last login was more than 30 days ago
     Subscription status is 'churned'
     Renter has performed at least 3 searches in the past 90 days (showing latent intent)
@@ -39,6 +42,6 @@ INPUT:
 OUTPUT:
     Run command in terminal:
     ```
-    cd /home/caio-araujo/Projects/Python/lifecycle-platform-challenge && python ai-session/generate_data.py
+    cd ~/Projects/Python/lifecycle-platform-challenge && python ai-session/generate_data.py
     ```
     Running the Python script to generate bulk sample data in CSV format based on the provided schema.

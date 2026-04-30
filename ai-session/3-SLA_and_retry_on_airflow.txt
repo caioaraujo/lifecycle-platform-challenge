@@ -1,0 +1,15 @@
+INPUT:
+    Add retry and SLA configuration for this DAG
+
+OUTPUT:
+    ```python
+    default_args = {
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+    }
+
+    def sla_miss_callback(dag, task_list, blocking_task_list, slas, blocking_tis):
+        print("SLA missed!")
+        print(f"DAG: {dag.dag_id}")
+        print(f"Tasks: {task_list}")
+    ```
